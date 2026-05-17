@@ -148,7 +148,7 @@ appsGrid.onclick = (event) => {
     const tile = event.target.closest('.app-tile');
     if (!tile || event.target.matches('input')) return;
     selectedAppIndex = Number(tile.dataset.index);
-    renderApps();
+    updateSelectedTile();
 };
 
 appsGrid.oninput = (event) => {
@@ -184,6 +184,12 @@ appsGrid.ondblclick = async (event) => {
     setState(res.ok ? 'Приложение запущено через прокси' : 'Ошибка запуска', res.ok ? 'ok' : 'bad');
     refreshLog();
 };
+
+function updateSelectedTile() {
+    appsGrid.querySelectorAll('.app-tile').forEach((tile, index) => {
+        tile.classList.toggle('selected', index === selectedAppIndex);
+    });
+}
 
 appsGrid.ondragstart = (event) => {
     const tile = event.target.closest('.app-tile');
