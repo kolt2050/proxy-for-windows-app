@@ -88,6 +88,9 @@ const (
 var (
 	proxyEngineMu      sync.Mutex
 	proxyEngineRunning bool
+	uiHeartbeatMu      sync.Mutex
+	lastUIHeartbeat    time.Time
+	uiSeen             bool
 )
 
 var upgrader = websocket.Upgrader{
@@ -791,6 +794,13 @@ func main() {
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
+	mux.HandleFunc("/ui-heartbeat", func(w http.ResponseWriter, r *http.Request) {
+		uiHeartbeatMu.Lock()
+		lastUIHeartbeat = time.Now()
+		uiSeen = true
+		uiHeartbeatMu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("/ws", handleConnections)
 	mux.HandleFunc("/recognize", handleRecognize)
 	mux.HandleFunc("/proxy-config", handleProxyConfig)
@@ -841,8 +851,25 @@ func main() {
 		}()
 	}
 
+	go watchUIHeartbeat()
+
 	logf("server starting addr=:8006 noBrowser=%v", *noBrowser)
 	log.Fatal(http.ListenAndServe(":8006", logRequests(mux)))
+}
+
+func watchUIHeartbeat() {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		uiHeartbeatMu.Lock()
+		seen := uiSeen
+		lastSeen := lastUIHeartbeat
+		uiHeartbeatMu.Unlock()
+		if seen && time.Since(lastSeen) > 12*time.Second {
+			logf("ui heartbeat lost; exiting application")
+			os.Exit(0)
+		}
+	}
 }
 
 func logRequests(next http.Handler) http.Handler {

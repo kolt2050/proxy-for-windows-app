@@ -65,6 +65,14 @@ async function refreshLog() {
     logOutput.scrollTop = logOutput.scrollHeight;
 }
 
+async function heartbeat() {
+    try {
+        await fetch('/ui-heartbeat', { method: 'POST', keepalive: true });
+    } catch {
+        // The backend may already be shutting down.
+    }
+}
+
 document.getElementById('choose-btn').onclick = async () => {
     const button = document.getElementById('choose-btn');
     button.disabled = true;
@@ -217,4 +225,6 @@ appsGrid.ondrop = async (event) => {
 
 load();
 refreshLog();
+heartbeat();
 setInterval(refreshLog, 3000);
+setInterval(heartbeat, 3000);
