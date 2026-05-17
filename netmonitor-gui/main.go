@@ -82,7 +82,7 @@ type Application struct {
 
 const (
 	proxyConfigPath = "proxy_config.json"
-	defaultDevice   = "wintun://mytun"
+	defaultDevice   = "tun://mytun"
 )
 
 var (
@@ -278,7 +278,7 @@ func saveProxyConfig(config ProxyConfig) error {
 func normalizeProxyConfig(config ProxyConfig) ProxyConfig {
 	config.ProxyURL = strings.TrimSpace(config.ProxyURL)
 	config.Device = strings.TrimSpace(config.Device)
-	if config.Device == "" {
+	if config.Device == "" || config.Device == "wintun://mytun" {
 		config.Device = defaultDevice
 	}
 
