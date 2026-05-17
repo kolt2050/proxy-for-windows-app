@@ -241,7 +241,7 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 func loadProxyConfig() ProxyConfig {
 	data, err := os.ReadFile(proxyConfigPath)
 	if err != nil {
-		return ProxyConfig{}
+		return normalizeProxyConfig(ProxyConfig{})
 	}
 	var config ProxyConfig
 	if err := json.Unmarshal(data, &config); err != nil {

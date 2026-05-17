@@ -14,13 +14,21 @@ const tableContainer = document.querySelector('.table-container');
 let connections = [];
 let proxyConfig = { proxyUrl: '', device: '', processes: [] };
 
+function normalizeProxyConfig(config) {
+    return {
+        proxyUrl: config?.proxyUrl || '',
+        device: config?.device || '',
+        processes: Array.isArray(config?.processes) ? config.processes : []
+    };
+}
+
 function normalizedProcessSet() {
     return new Set(proxyConfig.processes.map(p => p.toLowerCase()));
 }
 
 async function loadProxyConfig() {
     const response = await fetch('/proxy-config');
-    proxyConfig = await response.json();
+    proxyConfig = normalizeProxyConfig(await response.json());
     proxyUrlInput.value = proxyConfig.proxyUrl || '';
     deviceInput.value = proxyConfig.device || '';
     renderSelectedProcesses();
@@ -36,7 +44,7 @@ async function saveProxyConfig() {
         body: JSON.stringify(proxyConfig)
     });
     if (!response.ok) throw new Error(await response.text());
-    proxyConfig = await response.json();
+    proxyConfig = normalizeProxyConfig(await response.json());
     proxyUrlInput.value = proxyConfig.proxyUrl || '';
     deviceInput.value = proxyConfig.device || '';
     renderSelectedProcesses();
