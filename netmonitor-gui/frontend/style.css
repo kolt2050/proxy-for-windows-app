@@ -59,23 +59,6 @@ button {
 }
 button:hover { background: #f4f7fb; }
 button.primary { background: var(--blue); color: #fff; border-color: var(--blue); min-width: 88px; }
-.proxies-list {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 10px;
-}
-.proxy-chip {
-    height: auto;
-    min-width: 132px;
-    padding: 8px 10px;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-}
-.proxy-chip.selected { border-color: var(--blue); background: var(--blue-soft); }
-.proxy-editor #proxy-url { flex: 1; }
 .apps-card { min-height: 320px; display: flex; flex-direction: column; }
 .apps-grid {
     flex: 1;
@@ -89,8 +72,8 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     padding: 10px;
 }
 .app-tile {
-    width: 150px;
-    min-height: 132px;
+    width: 230px;
+    min-height: 138px;
     border: 1px solid transparent;
     border-radius: 8px;
     display: flex;
@@ -115,14 +98,13 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     font-weight: 700;
 }
 .label {
-    width: 130px;
+    width: 210px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-size: 12px;
 }
-.app-proxy { width: 130px; height: 28px; font-size: 12px; padding: 0 8px; }
-.app-tile small { color: var(--muted); font-size: 11px; }
+.app-proxy-input { width: 210px; height: 30px; font-size: 12px; padding: 0 8px; }
 .console {
     min-height: 118px;
     flex: 1;

@@ -9,39 +9,22 @@
     <div class="app">
         <header>
             <div>
-                <h1>ProxyForApp <span>0.7.2</span></h1>
-                <p>Ярлыки приложений с отдельным прокси для каждого запуска</p>
+                <h1>ProxyForApp <span>0.8.0</span></h1>
+                <p>Добавь приложение и укажи его прокси прямо на ярлыке</p>
             </div>
             <div id="proxy-state" class="state">Готов к настройке</div>
         </header>
-
-        <section class="card proxy-card">
-            <div class="section-head">
-                <h2>Прокси</h2>
-                <div class="actions">
-                    <button id="add-proxy-btn">Добавить</button>
-                    <button id="delete-proxy-btn">Удалить</button>
-                </div>
-            </div>
-            <div id="proxies-list" class="proxies-list"></div>
-            <div class="row proxy-editor">
-                <input id="proxy-url" type="password" placeholder="196.18.12.25:8000:login:password">
-                <button id="save-proxy-btn">Сохранить</button>
-                <button id="test-btn" class="primary">Тест</button>
-            </div>
-        </section>
 
         <section class="card apps-card">
             <div class="section-head">
                 <h2>Приложения</h2>
                 <div class="actions">
-                    <button id="start-btn">Запустить маршрутизатор</button>
                     <button id="catalog-btn">Добавить из списка</button>
                     <button id="choose-btn">Выбрать .exe</button>
                     <button id="delete-btn">Удалить</button>
                 </div>
             </div>
-            <p>Двойной клик запускает новый экземпляр приложения. У каждого ярлыка можно выбрать свой прокси. Ярлыки можно перетаскивать.</p>
+            <p>Сначала добавь приложение, затем впиши его прокси в формате <strong>IP:PORT:LOGIN:PASSWORD</strong>. Двойной клик запускает ярлык через указанный прокси.</p>
             <div id="apps-grid" class="apps-grid"></div>
         </section>
 

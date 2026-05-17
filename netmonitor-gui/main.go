@@ -76,7 +76,8 @@ type Application struct {
 	Name        string `json:"name"`
 	Path        string `json:"path"`
 	ProcessName string `json:"processName"`
-	ProxyID     string `json:"proxyId"`
+	ProxyID     string `json:"proxyId,omitempty"` // legacy
+	Proxy       string `json:"proxy"`
 }
 
 const (
@@ -324,6 +325,15 @@ func normalizeProxyConfig(config ProxyConfig) ProxyConfig {
 			continue
 		}
 		app.ProxyID = strings.TrimSpace(app.ProxyID)
+		app.Proxy = strings.TrimSpace(app.Proxy)
+		if app.Proxy == "" && app.ProxyID != "" {
+			for _, item := range proxies {
+				if item.ID == app.ProxyID {
+					app.Proxy = item.URL
+					break
+				}
+			}
+		}
 		if app.ProxyID == "" && len(proxies) > 0 {
 			app.ProxyID = proxies[0].ID
 		}
@@ -568,9 +578,6 @@ func handleChooseExecutable(w http.ResponseWriter, r *http.Request) {
 		ProcessName: filepath.Base(path),
 	}
 	config := loadProxyConfig()
-	if len(config.Proxies) > 0 {
-		app.ProxyID = config.Proxies[0].ID
-	}
 	config.Applications = append(config.Applications, app)
 	if err := saveProxyConfig(config); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -660,21 +667,14 @@ func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	config := loadProxyConfig()
-	var selectedProxy *ProxyEntry
-	for i := range config.Proxies {
-		if config.Proxies[i].ID == app.ProxyID {
-			selectedProxy = &config.Proxies[i]
-			break
-		}
-	}
-	if selectedProxy == nil {
+	if strings.TrimSpace(app.Proxy) == "" {
 		http.Error(w, "application proxy is not configured", http.StatusBadRequest)
 		return
 	}
 	if !proxyEngineRunning {
 		engine.Insert(&engine.Key{
 			Device:   config.Device,
-			Proxy:    normalizedProxyOrRaw(selectedProxy.URL),
+			Proxy:    normalizedProxyOrRaw(app.Proxy),
 			LogLevel: "info",
 		})
 		if err := engine.StartWithError(); err != nil {
@@ -696,12 +696,12 @@ func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := engine.SetPIDProxy(uint32(cmd.Process.Pid), normalizedProxyOrRaw(selectedProxy.URL), app.Name); err != nil {
+	if err := engine.SetPIDProxy(uint32(cmd.Process.Pid), normalizedProxyOrRaw(app.Proxy), app.Name); err != nil {
 		logf("application pid route failed path=%s pid=%d error=%v", app.Path, cmd.Process.Pid, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	logf("application launched path=%s pid=%d proxy=%s", app.Path, cmd.Process.Pid, selectedProxy.ID)
+	logf("application launched path=%s pid=%d proxy=%s", app.Path, cmd.Process.Pid, proxyDisplayName(app.Proxy))
 	w.WriteHeader(http.StatusNoContent)
 }
 
