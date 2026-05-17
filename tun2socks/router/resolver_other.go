@@ -14,6 +14,10 @@ func newProcessResolver() (processResolver, error) {
 	return nil, fmt.Errorf("proxy-processes is supported only on Windows")
 }
 
-func (unsupportedResolver) Resolve(*M.Metadata) (string, error) {
-	return "", fmt.Errorf("proxy-processes is supported only on Windows")
+func (unsupportedResolver) Resolve(*M.Metadata) (OwnerInfo, error) {
+	return OwnerInfo{}, fmt.Errorf("proxy-processes is supported only on Windows")
+}
+
+func parentPID(uint32) (uint32, error) {
+	return 0, fmt.Errorf("process ancestry is supported only on Windows")
 }

@@ -2,21 +2,29 @@
 
 ## Single executable workflow
 
-The application is intended to be distributed as one executable: `proxy-for-windows-app.exe`.
+The application is distributed as one executable: `proxy-for-windows-app.exe`.
 
 Inside that single binary:
 
 - the GUI is embedded;
 - the proxy engine is embedded;
-- selected applications are proxied while all others go directly.
+- each shortcut can be assigned its own proxy;
+- only apps launched from the GUI are routed through their assigned proxy, while unrelated apps go directly.
 
-The GUI lets you configure selective proxying without editing command-line flags:
+## Current workflow
 
-1. Enter the proxy URL and TUN device name.
-2. Click rows in the live process table, or drag an `.exe` / `.lnk` into the window, to choose applications.
-3. Click **Запустить** to start the built-in proxy engine with the selected process list.
+1. Add one or more proxies.
+2. Add an application shortcut from the Start Menu catalog or by choosing an `.exe`.
+3. Assign a proxy to each shortcut.
+4. Double-click a shortcut to launch a new process and bind that launched process tree to the selected proxy.
+5. Reorder shortcuts by drag-and-drop or remove them from the list.
 
-The GUI stores local settings in `netmonitor-gui/proxy_config.json`.
+Local settings are stored next to the executable in `proxy_config.json`.
+
+## Important boundary
+
+This is a one-file launcher with selective routing, not a full Windows sandbox.  
+It routes the launched process tree by PID so an already-running unrelated instance is not automatically affected, but applications that intentionally reuse an existing instance may still need app-specific launch arguments to behave as a truly separate instance.
 
 ## Local builds in restricted environments
 

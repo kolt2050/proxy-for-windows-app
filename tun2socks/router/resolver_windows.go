@@ -58,22 +58,30 @@ func newProcessResolver() (processResolver, error) {
 	return windowsResolver{}, nil
 }
 
-func (windowsResolver) Resolve(metadata *M.Metadata) (string, error) {
+func (windowsResolver) Resolve(metadata *M.Metadata) (OwnerInfo, error) {
 	switch metadata.Network {
 	case M.TCP:
 		pid, err := findTCPPID(metadata)
 		if err != nil {
-			return "", err
+			return OwnerInfo{}, err
 		}
-		return processName(pid)
+		name, err := processName(pid)
+		if err != nil {
+			return OwnerInfo{}, err
+		}
+		return OwnerInfo{PID: pid, ProcessName: name}, nil
 	case M.UDP:
 		pid, err := findUDPPID(metadata)
 		if err != nil {
-			return "", err
+			return OwnerInfo{}, err
 		}
-		return processName(pid)
+		name, err := processName(pid)
+		if err != nil {
+			return OwnerInfo{}, err
+		}
+		return OwnerInfo{PID: pid, ProcessName: name}, nil
 	default:
-		return "", fmt.Errorf("unsupported network: %s", metadata.Network)
+		return OwnerInfo{}, fmt.Errorf("unsupported network: %s", metadata.Network)
 	}
 }
 
@@ -174,6 +182,29 @@ func processName(pid uint32) (string, error) {
 		return fullPath[idx+1:], nil
 	}
 	return fullPath, nil
+}
+
+func parentPID(pid uint32) (uint32, error) {
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer windows.CloseHandle(snapshot)
+
+	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
+	if err := windows.Process32First(snapshot, &entry); err != nil {
+		return 0, err
+	}
+	for {
+		if entry.ProcessID == pid {
+			return entry.ParentProcessID, nil
+		}
+		err := windows.Process32Next(snapshot, &entry)
+		if err != nil {
+			break
+		}
+	}
+	return 0, fmt.Errorf("parent process not found for pid=%d", pid)
 }
 
 func sameIPv4(raw uint32, ip netip.Addr) bool {

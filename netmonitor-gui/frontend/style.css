@@ -37,16 +37,17 @@ header p, .apps-card p { margin: 0; color: var(--muted); font-size: 14px; }
     padding: 16px;
 }
 h2 { margin: 0 0 12px; font-size: 15px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.section-head h2 { margin: 0; }
+.actions { display: flex; gap: 8px; }
 .row { display: flex; gap: 10px; }
-input {
+input, select {
     height: 34px;
     border: 1px solid #c8d4e0;
     border-radius: 4px;
     padding: 0 12px;
     font-size: 14px;
 }
-#proxy-url { flex: 1; }
-#device { width: 210px; }
 button {
     border: 1px solid #c8d4e0;
     background: #fff;
@@ -57,11 +58,28 @@ button {
     cursor: pointer;
 }
 button:hover { background: #f4f7fb; }
-button.primary { background: var(--blue); color: #fff; border-color: var(--blue); min-width: 112px; }
-.section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.section-head h2 { margin: 0; }
-.actions { display: flex; gap: 8px; }
-.apps-card { min-height: 292px; display: flex; flex-direction: column; }
+button.primary { background: var(--blue); color: #fff; border-color: var(--blue); min-width: 88px; }
+.proxies-list {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.proxy-chip {
+    height: auto;
+    min-width: 132px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+}
+.proxy-chip span { color: var(--muted); font-size: 12px; }
+.proxy-chip.selected { border-color: var(--blue); background: var(--blue-soft); }
+.proxy-editor #proxy-name { width: 170px; }
+.proxy-editor #proxy-url { flex: 1; }
+.proxy-editor #device { width: 180px; }
+.apps-card { min-height: 320px; display: flex; flex-direction: column; }
 .apps-grid {
     flex: 1;
     margin-top: 10px;
@@ -69,15 +87,15 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     background: #f8fbff;
     display: flex;
     align-content: flex-start;
-    gap: 6px;
+    gap: 8px;
     flex-wrap: wrap;
     padding: 10px;
 }
 .app-tile {
-    width: 94px;
-    height: 82px;
+    width: 150px;
+    min-height: 132px;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 8px;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -85,6 +103,7 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     gap: 7px;
     cursor: pointer;
     text-align: center;
+    padding: 8px;
 }
 .app-tile:hover, .app-tile.selected { border-color: #c8d7ee; background: #fff; }
 .app-tile.selected { background: var(--blue-soft); border-color: var(--blue); }
@@ -99,12 +118,14 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     font-weight: 700;
 }
 .label {
-    width: 84px;
+    width: 130px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-size: 12px;
 }
+.app-proxy { width: 130px; height: 28px; font-size: 12px; padding: 0 8px; }
+.app-tile small { color: var(--muted); font-size: 11px; }
 .console {
     min-height: 118px;
     flex: 1;

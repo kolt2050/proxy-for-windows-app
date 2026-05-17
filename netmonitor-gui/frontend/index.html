@@ -9,17 +9,26 @@
     <div class="app">
         <header>
             <div>
-                <h1>ProxyForApp <span>0.6.0</span></h1>
-                <p>Запуск выбранных Windows-приложений через прокси</p>
+                <h1>ProxyForApp <span>0.7.0</span></h1>
+                <p>Ярлыки приложений с отдельным прокси для каждого запуска</p>
             </div>
-            <div id="proxy-state" class="state">Прокси не проверен</div>
+            <div id="proxy-state" class="state">Готов к настройке</div>
         </header>
 
         <section class="card proxy-card">
-            <h2>Прокси</h2>
-            <div class="row">
+            <div class="section-head">
+                <h2>Прокси</h2>
+                <div class="actions">
+                    <button id="add-proxy-btn">Добавить</button>
+                    <button id="delete-proxy-btn">Удалить</button>
+                </div>
+            </div>
+            <div id="proxies-list" class="proxies-list"></div>
+            <div class="row proxy-editor">
+                <input id="proxy-name" type="text" placeholder="Название прокси">
                 <input id="proxy-url" type="password" placeholder="socks5://127.0.0.1:1080">
                 <input id="device" type="text" placeholder="wintun://mytun">
+                <button id="save-proxy-btn">Сохранить</button>
                 <button id="test-btn" class="primary">Тест</button>
             </div>
         </section>
@@ -28,13 +37,13 @@
             <div class="section-head">
                 <h2>Приложения</h2>
                 <div class="actions">
-                    <button id="start-btn">Запустить прокси</button>
+                    <button id="start-btn">Запустить маршрутизатор</button>
                     <button id="catalog-btn">Добавить из списка</button>
                     <button id="choose-btn">Выбрать .exe</button>
                     <button id="delete-btn">Удалить</button>
                 </div>
             </div>
-            <p>Двойной клик по ярлыку запускает приложение через сохранённый прокси.</p>
+            <p>Двойной клик запускает новый экземпляр приложения. У каждого ярлыка можно выбрать свой прокси. Ярлыки можно перетаскивать.</p>
             <div id="apps-grid" class="apps-grid"></div>
         </section>
 

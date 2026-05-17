@@ -33,6 +33,7 @@ var (
 
 	// _defaultProxy holds the default proxy for the engine.
 	_defaultProxy proxy.Proxy
+	_pidRouter    *router.PIDRouter
 
 	// _defaultDevice holds the default device for the engine.
 	_defaultDevice device.Device
@@ -68,6 +69,41 @@ func StartWithError() error {
 // that need to keep their own process alive, such as GUI frontends.
 func StopWithError() error {
 	return stop()
+}
+
+// EnablePIDRouting switches the running engine to dynamic PID-based routing.
+// The GUI uses this mode to assign a different proxy to every launched shortcut.
+func EnablePIDRouting() error {
+	_engineMu.Lock()
+	defer _engineMu.Unlock()
+	if _pidRouter != nil {
+		return nil
+	}
+	directProxy, err := direct.New()
+	if err != nil {
+		return err
+	}
+	_pidRouter, err = router.NewPIDRouter(directProxy)
+	if err != nil {
+		return err
+	}
+	tunnel.T().SetProxy(_pidRouter)
+	log.Infof("[ROUTER] dynamic PID routing enabled")
+	return nil
+}
+
+func SetPIDProxy(pid uint32, proxyURL, label string) error {
+	_engineMu.Lock()
+	defer _engineMu.Unlock()
+	if _pidRouter == nil {
+		return errors.New("pid router is not enabled")
+	}
+	proxied, err := parseProxy(proxyURL)
+	if err != nil {
+		return err
+	}
+	_pidRouter.Set(pid, proxied, label)
+	return nil
 }
 
 // Insert loads *Key to the default engine.
@@ -113,6 +149,7 @@ func stop() (err error) {
 		_defaultStack.Close()
 		_defaultStack.Wait()
 	}
+	_pidRouter = nil
 	_engineMu.Unlock()
 	return nil
 }
