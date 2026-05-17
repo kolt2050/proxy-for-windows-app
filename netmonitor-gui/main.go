@@ -398,7 +398,31 @@ func resolveLNK(path string) (string, error) {
 	return res, nil
 }
 
+func appURL() string {
+	return "http://localhost:8006"
+}
+
+func openAppWindow() {
+	exec.Command("cmd", "/c", "start", "msedge", "--app="+appURL()).Start()
+}
+
+func existingInstanceRunning() bool {
+	client := http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Get(appURL() + "/ping")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	return err == nil && resp.StatusCode == http.StatusOK && string(body) == "pong"
+}
+
 func main() {
+	if existingInstanceRunning() {
+		openAppWindow()
+		return
+	}
+
 	initLogger()
 	if userLog != nil {
 		userLog.Println("Application startup")
@@ -458,8 +482,7 @@ func main() {
 	if !*noBrowser {
 		go func() {
 			time.Sleep(1 * time.Second)
-			// Launch browser in app mode (Edge or Chrome)
-			exec.Command("cmd", "/c", "start msedge --app=http://localhost:8006").Start()
+			openAppWindow()
 		}()
 	}
 
