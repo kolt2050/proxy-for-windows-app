@@ -1,68 +1,55 @@
 <!DOCTYPE html>
-<html lang="ru" translate="no">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="google" content="notranslate">
-    <title>NetMonitor GUI</title>
+    <title>ProxyForApp</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="app-container">
+    <div class="app">
         <header>
-            <div class="header-content">
-                <h1>NetMonitor <span class="badge">Live</span></h1>
-                <div class="controls">
-                    <input type="text" id="search" placeholder="Поиск по имени или PID...">
-                    <button id="restart-btn" class="btn-warning">Перезапуск</button>
-                    <button id="exit-btn" class="btn-danger">Выход</button>
-                </div>
+            <div>
+                <h1>ProxyForApp <span>0.6.0</span></h1>
+                <p>Запуск выбранных Windows-приложений через прокси</p>
             </div>
+            <div id="proxy-state" class="state">Прокси не проверен</div>
         </header>
 
-        <section class="proxy-panel glass">
-            <div class="proxy-fields">
-                <label>
-                    <span>Прокси</span>
-                    <input type="text" id="proxy-url" placeholder="socks5://127.0.0.1:1080">
-                </label>
-                <label>
-                    <span>Устройство</span>
-                    <input type="text" id="device" placeholder="wintun://mytun">
-                </label>
-                <button id="save-proxy-btn">Сохранить</button>
-                <button id="start-proxy-btn">Запустить</button>
-                <button id="stop-proxy-btn" class="btn-danger">Остановить</button>
+        <section class="card proxy-card">
+            <h2>Прокси</h2>
+            <div class="row">
+                <input id="proxy-url" type="password" placeholder="socks5://127.0.0.1:1080">
+                <input id="device" type="text" placeholder="wintun://mytun">
+                <button id="test-btn" class="primary">Тест</button>
             </div>
-            <div class="selected-apps">
-                <span class="muted">Через прокси:</span>
-                <div id="selected-processes" class="chips"></div>
-            </div>
-            <p class="hint">Кликните по процессу в таблице, чтобы включить или исключить его из проксирования. Можно также перетащить сюда .exe или .lnk.</p>
         </section>
 
-        <main>
-            <div class="table-container glass">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Прокси</th>
-                            <th>Протокол</th>
-                            <th>Процесс</th>
-                            <th>PID</th>
-                            <th>Локальный адрес</th>
-                            <th>Внешний адрес</th>
-                            <th>Статус</th>
-                        </tr>
-                    </thead>
-                    <tbody id="conn-table"></tbody>
-                </table>
+        <section class="card apps-card">
+            <div class="section-head">
+                <h2>Приложения</h2>
+                <div class="actions">
+                    <button id="start-btn">Запустить прокси</button>
+                    <button id="catalog-btn">Добавить из списка</button>
+                    <button id="choose-btn">Выбрать .exe</button>
+                    <button id="delete-btn">Удалить</button>
+                </div>
             </div>
-        </main>
+            <p>Двойной клик по ярлыку запускает приложение через сохранённый прокси.</p>
+            <div id="apps-grid" class="apps-grid"></div>
+        </section>
 
-        <footer>
-            <div id="status">Подключение к серверу...</div>
-        </footer>
+        <section class="console">
+            <pre id="log-output"></pre>
+        </section>
+    </div>
+    <div id="catalog-modal" class="modal hidden">
+        <div class="modal-card">
+            <div class="section-head">
+                <h2>Добавить из списка</h2>
+                <button id="close-catalog">Закрыть</button>
+            </div>
+            <div id="catalog-list" class="catalog-list"></div>
+        </div>
     </div>
     <script src="app.js"></script>
 </body>

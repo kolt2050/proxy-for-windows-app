@@ -9,7 +9,9 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -57,9 +59,16 @@ type Connection struct {
 }
 
 type ProxyConfig struct {
-	ProxyURL  string   `json:"proxyUrl"`
-	Device    string   `json:"device"`
-	Processes []string `json:"processes"`
+	ProxyURL     string        `json:"proxyUrl"`
+	Device       string        `json:"device"`
+	Processes    []string      `json:"processes"`
+	Applications []Application `json:"applications"`
+}
+
+type Application struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	ProcessName string `json:"processName"`
 }
 
 const proxyConfigPath = "proxy_config.json"
@@ -255,23 +264,38 @@ func saveProxyConfig(config ProxyConfig) error {
 }
 
 func normalizeProxyConfig(config ProxyConfig) ProxyConfig {
-	seen := make(map[string]struct{}, len(config.Processes))
-	processes := make([]string, 0, len(config.Processes))
-	for _, process := range config.Processes {
-		process = strings.TrimSpace(process)
-		if process == "" {
-			continue
-		}
-		key := strings.ToLower(process)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		processes = append(processes, process)
-	}
+	seen := make(map[string]struct{}, len(config.Applications))
+	processes := make([]string, 0, len(config.Applications))
 	config.ProxyURL = strings.TrimSpace(config.ProxyURL)
 	config.Device = strings.TrimSpace(config.Device)
+	apps := make([]Application, 0, len(config.Applications))
+	appSeen := make(map[string]struct{}, len(config.Applications))
+	for _, app := range config.Applications {
+		app.Name = strings.TrimSpace(app.Name)
+		app.Path = strings.TrimSpace(app.Path)
+		app.ProcessName = strings.TrimSpace(app.ProcessName)
+		if app.ProcessName == "" && app.Path != "" {
+			app.ProcessName = filepath.Base(app.Path)
+		}
+		if app.Name == "" && app.Path != "" {
+			app.Name = strings.TrimSuffix(filepath.Base(app.Path), filepath.Ext(app.Path))
+		}
+		if app.ProcessName == "" {
+			continue
+		}
+		key := strings.ToLower(app.ProcessName + "|" + app.Path)
+		if _, ok := appSeen[key]; ok {
+			continue
+		}
+		appSeen[key] = struct{}{}
+		apps = append(apps, app)
+		if _, ok := seen[strings.ToLower(app.ProcessName)]; !ok {
+			processes = append(processes, app.ProcessName)
+			seen[strings.ToLower(app.ProcessName)] = struct{}{}
+		}
+	}
 	config.Processes = processes
+	config.Applications = apps
 	return config
 }
 
@@ -369,6 +393,172 @@ func handleProxyEngineStop(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func handleProxyTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	config := loadProxyConfig()
+	u, err := url.Parse(config.ProxyURL)
+	if err != nil || u.Host == "" {
+		http.Error(w, "invalid proxy url", http.StatusBadRequest)
+		return
+	}
+	conn, err := net.DialTimeout("tcp", u.Host, 3*time.Second)
+	if err != nil {
+		logf("proxy test failed proxy=%s error=%v", config.ProxyURL, err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	conn.Close()
+	logf("proxy test succeeded proxy=%s", config.ProxyURL)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func chooseExecutable() (string, error) {
+	script := `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Filter = 'Applications (*.exe)|*.exe'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.FileName }`
+	out, err := exec.Command("powershell", "-NoProfile", "-STA", "-Command", script).Output()
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(string(out))
+	if path == "" {
+		return "", fmt.Errorf("selection cancelled")
+	}
+	return path, nil
+}
+
+func handleChooseExecutable(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	path, err := chooseExecutable()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	app := Application{
+		Name:        strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+		Path:        path,
+		ProcessName: filepath.Base(path),
+	}
+	config := loadProxyConfig()
+	config.Applications = append(config.Applications, app)
+	if err := saveProxyConfig(config); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	logf("application added path=%s", path)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(normalizeProxyConfig(config))
+}
+
+func handleApplications(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(loadProxyConfig().Applications)
+	case http.MethodPost:
+		var app Application
+		if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		config := loadProxyConfig()
+		config.Applications = append(config.Applications, app)
+		if err := saveProxyConfig(config); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		logf("application added from catalog path=%s", app.Path)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(normalizeProxyConfig(config))
+	case http.MethodDelete:
+		var app Application
+		if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		config := loadProxyConfig()
+		filtered := config.Applications[:0]
+		for _, current := range config.Applications {
+			if !strings.EqualFold(current.Path, app.Path) && !strings.EqualFold(current.ProcessName, app.ProcessName) {
+				filtered = append(filtered, current)
+			}
+		}
+		config.Applications = filtered
+		if err := saveProxyConfig(config); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		logf("application removed path=%s process=%s", app.Path, app.ProcessName)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(normalizeProxyConfig(config))
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleApplicationCatalog(w http.ResponseWriter, r *http.Request) {
+	script := `$roots=@("$env:APPDATA\Microsoft\Windows\Start Menu\Programs","$env:ProgramData\Microsoft\Windows\Start Menu\Programs"); $sh=New-Object -ComObject WScript.Shell; Get-ChildItem $roots -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object { $t=$sh.CreateShortcut($_.FullName).TargetPath; if($t -like '*.exe'){ [PSCustomObject]@{name=$_.BaseName;path=$t;processName=[IO.Path]::GetFileName($t)} } } | Sort-Object name -Unique | Select-Object -First 200 | ConvertTo-Json -Compress`
+	out, err := exec.Command("powershell", "-NoProfile", "-Command", script).Output()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	raw := strings.TrimSpace(string(out))
+	if raw == "" {
+		raw = "[]"
+	}
+	if !strings.HasPrefix(raw, "[") {
+		raw = "[" + raw + "]"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(raw))
+}
+
+func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var app Application
+	if err := json.NewDecoder(r.Body).Decode(&app); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if app.Path == "" {
+		http.Error(w, "application path is required", http.StatusBadRequest)
+		return
+	}
+	if err := exec.Command(app.Path).Start(); err != nil {
+		logf("application launch failed path=%s error=%v", app.Path, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	logf("application launched path=%s", app.Path)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleLogTail(w http.ResponseWriter, r *http.Request) {
+	data, err := os.ReadFile("app.log")
+	if err != nil {
+		if os.IsNotExist(err) {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) > 80 {
+		lines = lines[len(lines)-80:]
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write([]byte(strings.Join(lines, "\n")))
+}
+
 func resolveLNK(path string) (string, error) {
 	// Escape single quotes for PowerShell
 	escapedPath := strings.ReplaceAll(path, "'", "''")
@@ -443,6 +633,12 @@ func main() {
 	mux.HandleFunc("/proxy-engine/status", handleProxyEngineStatus)
 	mux.HandleFunc("/proxy-engine/start", handleProxyEngineStart)
 	mux.HandleFunc("/proxy-engine/stop", handleProxyEngineStop)
+	mux.HandleFunc("/proxy-test", handleProxyTest)
+	mux.HandleFunc("/applications", handleApplications)
+	mux.HandleFunc("/applications/catalog", handleApplicationCatalog)
+	mux.HandleFunc("/applications/choose-exe", handleChooseExecutable)
+	mux.HandleFunc("/applications/launch", handleLaunchApplication)
+	mux.HandleFunc("/log-tail", handleLogTail)
 	mux.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
 		logf("restart requested")
 		executable, err := os.Executable()
