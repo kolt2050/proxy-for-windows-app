@@ -1,29 +1,20 @@
 # proxy-for-windows-app
 
-## Selective proxying on Windows
+## Single executable workflow
 
-`tun2socks` now supports selective routing by process name:
+The application is intended to be distributed as one executable: `proxy-for-windows-app.exe`.
 
-```powershell
-.\tun2socks.exe `
-  --device wintun://mytun `
-  --proxy socks5://127.0.0.1:1080 `
-  --proxy-processes chrome.exe,telegram.exe
-```
+Inside that single binary:
 
-With `--proxy-processes` enabled:
+- the GUI is embedded;
+- the proxy engine is embedded;
+- selected applications are proxied while all others go directly.
 
-- matching applications use the configured proxy;
-- all other applications are sent directly;
-- process matching is case-insensitive and currently works on Windows IPv4 flows.
-
-## GUI workflow
-
-`netmonitor-gui` now lets you configure selective proxying without editing command-line flags:
+The GUI lets you configure selective proxying without editing command-line flags:
 
 1. Enter the proxy URL and TUN device name.
 2. Click rows in the live process table, or drag an `.exe` / `.lnk` into the window, to choose applications.
-3. Click **Запустить** to launch the bundled `tun2socks.exe` with the selected process list.
+3. Click **Запустить** to start the built-in proxy engine with the selected process list.
 
 The GUI stores local settings in `netmonitor-gui/proxy_config.json`.
 
@@ -37,4 +28,4 @@ $env:GOCACHE = (Resolve-Path '.cache\go-build')
 go build .
 ```
 
-`tun2socks` currently requires Go 1.25, so a machine with only Go 1.24.x will still need the newer toolchain available.
+The combined application currently requires Go 1.25 to build because the embedded `tun2socks` module requires it.

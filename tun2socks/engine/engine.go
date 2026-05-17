@@ -46,16 +46,28 @@ var (
 
 // Start starts the default engine up.
 func Start() {
-	if err := start(); err != nil {
+	if err := StartWithError(); err != nil {
 		log.Fatalf("[ENGINE] failed to start: %v", err)
 	}
 }
 
 // Stop shuts the default engine down.
 func Stop() {
-	if err := stop(); err != nil {
+	if err := StopWithError(); err != nil {
 		log.Fatalf("[ENGINE] failed to stop: %v", err)
 	}
+}
+
+// StartWithError starts the default engine and returns startup errors to callers
+// that need to keep their own process alive, such as GUI frontends.
+func StartWithError() error {
+	return start()
+}
+
+// StopWithError stops the default engine and returns shutdown errors to callers
+// that need to keep their own process alive, such as GUI frontends.
+func StopWithError() error {
+	return stop()
 }
 
 // Insert loads *Key to the default engine.

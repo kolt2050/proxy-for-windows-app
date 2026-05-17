@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -14,12 +16,16 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/xjasonlyu/tun2socks/v2/engine"
 	"golang.org/x/sys/windows"
 	"path/filepath"
 	"strings"
 )
 
 var userLog *log.Logger
+
+//go:embed frontend/*
+var frontendFS embed.FS
 
 func initLogger() {
 	f, err := os.OpenFile("user_actions.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -48,8 +54,8 @@ type ProxyConfig struct {
 const proxyConfigPath = "proxy_config.json"
 
 var (
-	proxyEngineMu  sync.Mutex
-	proxyEngineCmd *exec.Cmd
+	proxyEngineMu      sync.Mutex
+	proxyEngineRunning bool
 )
 
 var upgrader = websocket.Upgrader{
@@ -301,13 +307,9 @@ func handleProxyConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func proxyEnginePath() string {
-	return filepath.Join("..", "tun2socks", "tun2socks.exe")
-}
-
 func handleProxyEngineStatus(w http.ResponseWriter, r *http.Request) {
 	proxyEngineMu.Lock()
-	running := proxyEngineCmd != nil && proxyEngineCmd.Process != nil
+	running := proxyEngineRunning
 	proxyEngineMu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"running": running})
@@ -328,43 +330,27 @@ func handleProxyEngineStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "at least one process is required", http.StatusBadRequest)
 		return
 	}
-	if _, err := os.Stat(proxyEnginePath()); err != nil {
-		http.Error(w, "tun2socks.exe not found at ../tun2socks/tun2socks.exe", http.StatusBadRequest)
-		return
-	}
-
 	proxyEngineMu.Lock()
 	defer proxyEngineMu.Unlock()
-	if proxyEngineCmd != nil && proxyEngineCmd.Process != nil {
+	if proxyEngineRunning {
 		http.Error(w, "proxy engine already running", http.StatusConflict)
 		return
 	}
 
-	args := []string{
-		"--device", config.Device,
-		"--proxy", config.ProxyURL,
-		"--proxy-processes", strings.Join(config.Processes, ","),
-	}
-	cmd := exec.Command(proxyEnginePath(), args...)
-	if err := cmd.Start(); err != nil {
+	engine.Insert(&engine.Key{
+		Device:         config.Device,
+		Proxy:          config.ProxyURL,
+		ProxyProcesses: config.Processes,
+		LogLevel:       "info",
+	})
+	if err := engine.StartWithError(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	proxyEngineCmd = cmd
+	proxyEngineRunning = true
 	if userLog != nil {
-		userLog.Printf("Proxy engine started: %s %v", proxyEnginePath(), args)
+		userLog.Printf("Proxy engine started: proxy=%s device=%s processes=%v", config.ProxyURL, config.Device, config.Processes)
 	}
-	go func() {
-		err := cmd.Wait()
-		proxyEngineMu.Lock()
-		if proxyEngineCmd == cmd {
-			proxyEngineCmd = nil
-		}
-		proxyEngineMu.Unlock()
-		if err != nil {
-			log.Printf("Proxy engine stopped: %v", err)
-		}
-	}()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -375,18 +361,18 @@ func handleProxyEngineStop(w http.ResponseWriter, r *http.Request) {
 	}
 	proxyEngineMu.Lock()
 	defer proxyEngineMu.Unlock()
-	if proxyEngineCmd == nil || proxyEngineCmd.Process == nil {
+	if !proxyEngineRunning {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if err := proxyEngineCmd.Process.Kill(); err != nil {
+	if err := engine.StopWithError(); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if userLog != nil {
 		userLog.Println("Proxy engine stopped by user")
 	}
-	proxyEngineCmd = nil
+	proxyEngineRunning = false
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -421,7 +407,11 @@ func main() {
 	noBrowser := flag.Bool("no-browser", false, "Do not open browser on startup")
 	flag.Parse()
 
-	http.Handle("/", http.FileServer(http.Dir("./frontend")))
+	frontendRoot, err := fs.Sub(frontendFS, "frontend")
+	if err != nil {
+		log.Fatal(err)
+	}
+	http.Handle("/", http.FileServer(http.FS(frontendRoot)))
 	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
