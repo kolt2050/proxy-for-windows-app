@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 
@@ -22,18 +23,28 @@ import (
 	"strings"
 )
 
-var userLog *log.Logger
+var appLog *log.Logger
 
 //go:embed frontend/*
 var frontendFS embed.FS
 
 func initLogger() {
-	f, err := os.OpenFile("user_actions.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Printf("Failed to open user_actions.log: %v", err)
+		log.Printf("failed to open app.log: %v", err)
 		return
 	}
-	userLog = log.New(f, "", log.LstdFlags)
+	appLog = log.New(f, "", log.LstdFlags)
+	log.SetOutput(f)
+	log.SetFlags(log.LstdFlags)
+}
+
+func logf(format string, args ...any) {
+	if appLog != nil {
+		appLog.Printf(format, args...)
+		return
+	}
+	log.Printf(format, args...)
 }
 
 type Connection struct {
@@ -65,9 +76,10 @@ var upgrader = websocket.Upgrader{
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("Upgrade error:", err)
+		logf("websocket upgrade error from %s: %v", r.RemoteAddr, err)
 		return
 	}
+	logf("websocket connected: %s", r.RemoteAddr)
 	defer conn.Close()
 
 	for {
@@ -141,10 +153,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRecognize(w http.ResponseWriter, r *http.Request) {
-	if userLog != nil {
-		userLog.Printf("Recognize: Handler hit from %s", r.RemoteAddr)
-	}
-	log.Printf("Recognize: incoming request from %s", r.RemoteAddr)
+	logf("recognize request from %s", r.RemoteAddr)
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -152,26 +161,20 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 
 	err := r.ParseMultipartForm(10 << 20) // 10MB
 	if err != nil {
-		log.Printf("Recognize: ParseMultipartForm error: %v", err)
+		logf("recognize parse multipart error: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	file, handler, err := r.FormFile("file")
 	if err != nil {
-		log.Printf("Recognize: error retrieving file from form: %v", err)
-		if userLog != nil {
-			userLog.Printf("Error: FormFile retrieval error: %v", err)
-		}
+		logf("recognize form file error: %v", err)
 		http.Error(w, "Error retrieving the file", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
 
-	if userLog != nil {
-		userLog.Printf("User action: Processing file %s (%d bytes)", handler.Filename, handler.Size)
-	}
-	log.Printf("Recognize: received file %s (%d bytes)", handler.Filename, handler.Size)
+	logf("recognize processing file=%s size=%d", handler.Filename, handler.Size)
 
 	ext := strings.ToLower(filepath.Ext(handler.Filename))
 	var procName string
@@ -185,7 +188,7 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 		// Save to temp file to resolve
 		tempFile, err := os.CreateTemp("", "*.lnk")
 		if err != nil {
-			log.Printf("Recognize: failed to create temp file: %v", err)
+			logf("recognize create temp file error: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -193,27 +196,21 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 
 		if _, err = io.Copy(tempFile, file); err != nil {
 			tempFile.Close()
-			log.Printf("Recognize: failed to save temp file: %v", err)
+			logf("recognize save temp file error: %v", err)
 			http.Error(w, "Failed to save file", http.StatusInternalServerError)
 			return
 		}
 		tempFile.Close()
 
-		log.Printf("Recognize: resolving shortcut %s (original name: %s)", tempFile.Name(), shortcutName)
+		logf("recognize resolving shortcut temp=%s original=%s", tempFile.Name(), shortcutName)
 		target, err := resolveLNK(tempFile.Name())
 
 		if err != nil {
-			log.Printf("Recognize: resolveLNK failed: %v. Falling back to shortcut name: %s", err, shortcutName)
-			if userLog != nil {
-				userLog.Printf("Info: Shortcut resolution failed (%v), using shortcut name: %s", err, shortcutName)
-			}
+			logf("recognize shortcut resolution failed: %v; fallback=%s", err, shortcutName)
 			procName = shortcutName
 		} else {
 			targetBase := filepath.Base(target)
-			log.Printf("Recognize: shortcut resolved to target: %s (base: %s)", target, targetBase)
-			if userLog != nil {
-				userLog.Printf("Recognition result: Shortcut %s resolved to %s", handler.Filename, target)
-			}
+			logf("recognize shortcut resolved file=%s target=%s", handler.Filename, target)
 
 			// Smart logic: if target is something generic like 'javaw.exe' or 'cmd.exe',
 			// the shortcut name might be more useful. Otherwise, the exe name is best for network monitoring.
@@ -225,15 +222,12 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	} else {
-		log.Printf("Recognize: unsupported file extension: %s", ext)
+		logf("recognize unsupported extension: %s", ext)
 		http.Error(w, "Unsupported file type", http.StatusBadRequest)
 		return
 	}
 
-	if ext == ".exe" && userLog != nil {
-		userLog.Printf("Recognition result: Executable %s recognized", procName)
-	}
-	log.Printf("Recognize: success, identified process: %s", procName)
+	logf("recognize success process=%s", procName)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"proc": "%s"}`, procName)
 }
@@ -245,7 +239,7 @@ func loadProxyConfig() ProxyConfig {
 	}
 	var config ProxyConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		log.Printf("Proxy config load error: %v", err)
+		logf("proxy config load error: %v", err)
 		return ProxyConfig{}
 	}
 	return normalizeProxyConfig(config)
@@ -297,9 +291,7 @@ func handleProxyConfig(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if userLog != nil {
-			userLog.Printf("Proxy config updated: proxy=%s processes=%v", config.ProxyURL, config.Processes)
-		}
+		logf("proxy config updated proxy=%s device=%s processes=%v", config.ProxyURL, config.Device, config.Processes)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(config)
 	default:
@@ -323,16 +315,19 @@ func handleProxyEngineStart(w http.ResponseWriter, r *http.Request) {
 
 	config := loadProxyConfig()
 	if config.ProxyURL == "" || config.Device == "" {
+		logf("proxy engine start rejected: missing proxy or device")
 		http.Error(w, "proxy and device are required", http.StatusBadRequest)
 		return
 	}
 	if len(config.Processes) == 0 {
+		logf("proxy engine start rejected: no processes selected")
 		http.Error(w, "at least one process is required", http.StatusBadRequest)
 		return
 	}
 	proxyEngineMu.Lock()
 	defer proxyEngineMu.Unlock()
 	if proxyEngineRunning {
+		logf("proxy engine start rejected: already running")
 		http.Error(w, "proxy engine already running", http.StatusConflict)
 		return
 	}
@@ -344,13 +339,12 @@ func handleProxyEngineStart(w http.ResponseWriter, r *http.Request) {
 		LogLevel:       "info",
 	})
 	if err := engine.StartWithError(); err != nil {
+		logf("proxy engine start failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	proxyEngineRunning = true
-	if userLog != nil {
-		userLog.Printf("Proxy engine started: proxy=%s device=%s processes=%v", config.ProxyURL, config.Device, config.Processes)
-	}
+	logf("proxy engine started proxy=%s device=%s processes=%v", config.ProxyURL, config.Device, config.Processes)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -366,12 +360,11 @@ func handleProxyEngineStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := engine.StopWithError(); err != nil {
+		logf("proxy engine stop failed: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if userLog != nil {
-		userLog.Println("Proxy engine stopped by user")
-	}
+	logf("proxy engine stopped by user")
 	proxyEngineRunning = false
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -403,7 +396,11 @@ func appURL() string {
 }
 
 func openAppWindow() {
-	exec.Command("cmd", "/c", "start", "msedge", "--app="+appURL()).Start()
+	if err := exec.Command("cmd", "/c", "start", "msedge", "--app="+appURL()).Start(); err != nil {
+		logf("open app window failed: %v", err)
+		return
+	}
+	logf("open app window requested")
 }
 
 func existingInstanceRunning() bool {
@@ -419,14 +416,14 @@ func existingInstanceRunning() bool {
 
 func main() {
 	if existingInstanceRunning() {
+		initLogger()
+		logf("existing instance detected; reopening UI")
 		openAppWindow()
 		return
 	}
 
 	initLogger()
-	if userLog != nil {
-		userLog.Println("Application startup")
-	}
+	logf("application startup version=single-exe os=%s arch=%s", runtime.GOOS, runtime.GOARCH)
 	hideConsole()
 	noBrowser := flag.Bool("no-browser", false, "Do not open browser on startup")
 	flag.Parse()
@@ -435,21 +432,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	http.Handle("/", http.FileServer(http.FS(frontendRoot)))
-	http.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.FS(frontendRoot)))
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
-	http.HandleFunc("/ws", handleConnections)
-	http.HandleFunc("/recognize", handleRecognize)
-	http.HandleFunc("/proxy-config", handleProxyConfig)
-	http.HandleFunc("/proxy-engine/status", handleProxyEngineStatus)
-	http.HandleFunc("/proxy-engine/start", handleProxyEngineStart)
-	http.HandleFunc("/proxy-engine/stop", handleProxyEngineStop)
-	http.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
-		log.Println("Restarting application...")
-		if userLog != nil {
-			userLog.Println("User action: Restarting application")
-		}
+	mux.HandleFunc("/ws", handleConnections)
+	mux.HandleFunc("/recognize", handleRecognize)
+	mux.HandleFunc("/proxy-config", handleProxyConfig)
+	mux.HandleFunc("/proxy-engine/status", handleProxyEngineStatus)
+	mux.HandleFunc("/proxy-engine/start", handleProxyEngineStart)
+	mux.HandleFunc("/proxy-engine/stop", handleProxyEngineStop)
+	mux.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
+		logf("restart requested")
 		executable, err := os.Executable()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -467,15 +462,15 @@ func main() {
 		cmd := exec.Command(executable, args...)
 		err = cmd.Start()
 		if err != nil {
+			logf("restart failed: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		logf("restart child started pid=%d", cmd.Process.Pid)
 		os.Exit(0)
 	})
-	http.HandleFunc("/exit", func(w http.ResponseWriter, r *http.Request) {
-		if userLog != nil {
-			userLog.Println("User action: Exiting application")
-		}
+	mux.HandleFunc("/exit", func(w http.ResponseWriter, r *http.Request) {
+		logf("exit requested")
 		os.Exit(0)
 	})
 
@@ -486,8 +481,16 @@ func main() {
 		}()
 	}
 
-	fmt.Println("Server started at :8006")
-	log.Fatal(http.ListenAndServe(":8006", nil))
+	logf("server starting addr=:8006 noBrowser=%v", *noBrowser)
+	log.Fatal(http.ListenAndServe(":8006", logRequests(mux)))
+}
+
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		logf("http method=%s path=%s remote=%s duration=%s", r.Method, r.URL.Path, r.RemoteAddr, time.Since(start))
+	})
 }
 
 func tcpState(s uint32) string {
