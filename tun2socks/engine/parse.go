@@ -74,8 +74,14 @@ func parseFD(u *url.URL, mtu uint32) (device.Device, error) {
 }
 
 func parseProxy(s string) (proxy.Proxy, error) {
+	s = strings.TrimSpace(s)
 	if !strings.Contains(s, "://") {
-		s = fmt.Sprintf("%s://%s", "socks5" /* default */, s)
+		parts := strings.Split(s, ":")
+		if len(parts) == 4 {
+			s = fmt.Sprintf("http://%s:%s@%s:%s", url.QueryEscape(parts[2]), url.QueryEscape(parts[3]), parts[0], parts[1])
+		} else {
+			s = fmt.Sprintf("%s://%s", "socks5" /* default */, s)
+		}
 	}
 
 	u, err := url.Parse(s)

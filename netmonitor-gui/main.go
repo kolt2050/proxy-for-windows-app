@@ -392,7 +392,7 @@ func handleProxyEngineStart(w http.ResponseWriter, r *http.Request) {
 
 	engine.Insert(&engine.Key{
 		Device:   config.Device,
-		Proxy:    config.Proxies[0].URL,
+		Proxy:    normalizedProxyOrRaw(config.Proxies[0].URL),
 		LogLevel: "info",
 	})
 	if err := engine.StartWithError(); err != nil {
@@ -448,7 +448,12 @@ func handleProxyTest(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	u, err := url.Parse(proxyURL)
+	normalizedProxyURL, err := normalizeProxyAddress(proxyURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	u, err := url.Parse(normalizedProxyURL)
 	if err != nil || u.Host == "" {
 		http.Error(w, "invalid proxy url", http.StatusBadRequest)
 		return
@@ -489,6 +494,33 @@ $owner.Dispose()
 		return "", fmt.Errorf("selection cancelled")
 	}
 	return path, nil
+}
+
+func normalizeProxyAddress(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("proxy is required")
+	}
+	if strings.Contains(raw, "://") {
+		return raw, nil
+	}
+	parts := strings.Split(raw, ":")
+	if len(parts) == 4 {
+		host, port, user, pass := parts[0], parts[1], parts[2], parts[3]
+		if host == "" || port == "" || user == "" || pass == "" {
+			return "", fmt.Errorf("proxy must be in host:port:login:password format")
+		}
+		return fmt.Sprintf("http://%s:%s@%s:%s", url.QueryEscape(user), url.QueryEscape(pass), host, port), nil
+	}
+	return "socks5://" + raw, nil
+}
+
+func normalizedProxyOrRaw(raw string) string {
+	normalized, err := normalizeProxyAddress(raw)
+	if err != nil {
+		return raw
+	}
+	return normalized
 }
 
 func handleChooseExecutable(w http.ResponseWriter, r *http.Request) {
@@ -614,7 +646,7 @@ func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
 	if !proxyEngineRunning {
 		engine.Insert(&engine.Key{
 			Device:   config.Device,
-			Proxy:    selectedProxy.URL,
+			Proxy:    normalizedProxyOrRaw(selectedProxy.URL),
 			LogLevel: "info",
 		})
 		if err := engine.StartWithError(); err != nil {
@@ -636,7 +668,7 @@ func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := engine.SetPIDProxy(uint32(cmd.Process.Pid), selectedProxy.URL, app.Name); err != nil {
+	if err := engine.SetPIDProxy(uint32(cmd.Process.Pid), normalizedProxyOrRaw(selectedProxy.URL), app.Name); err != nil {
 		logf("application pid route failed path=%s pid=%d error=%v", app.Path, cmd.Process.Pid, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

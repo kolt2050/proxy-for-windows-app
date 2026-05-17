@@ -83,6 +83,10 @@ function renderApps() {
 
 function maskProxy(value) {
     if (!value) return 'не задан';
+    const parts = value.split(':');
+    if (!value.includes('://') && parts.length === 4) {
+        return `${parts[0]}:${parts[1]}`;
+    }
     try {
         const url = new URL(value.includes('://') ? value : `socks5://${value}`);
         return `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ''}`;
