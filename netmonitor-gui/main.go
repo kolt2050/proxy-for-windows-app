@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -29,6 +30,9 @@ var appLog *log.Logger
 
 //go:embed frontend/*
 var frontendFS embed.FS
+
+//go:embed assets/wintun.dll
+var embeddedWintunDLL []byte
 
 func initLogger() {
 	f, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -781,6 +785,9 @@ func main() {
 
 	initLogger()
 	logf("application startup version=single-exe os=%s arch=%s", runtime.GOOS, runtime.GOARCH)
+	if err := ensureWintunDLL(); err != nil {
+		logf("wintun setup failed: %v", err)
+	}
 	hideConsole()
 	noBrowser := flag.Bool("no-browser", false, "Do not open browser on startup")
 	flag.Parse()
@@ -855,6 +862,23 @@ func main() {
 
 	logf("server starting addr=:8006 noBrowser=%v", *noBrowser)
 	log.Fatal(http.ListenAndServe(":8006", logRequests(mux)))
+}
+
+func ensureWintunDLL() error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	target := filepath.Join(filepath.Dir(executable), "wintun.dll")
+	current, err := os.ReadFile(target)
+	if err == nil && bytes.Equal(current, embeddedWintunDLL) {
+		return nil
+	}
+	if err := os.WriteFile(target, embeddedWintunDLL, 0644); err != nil {
+		return err
+	}
+	logf("wintun.dll extracted path=%s", target)
+	return nil
 }
 
 func watchUIHeartbeat() {
