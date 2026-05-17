@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
@@ -776,6 +777,14 @@ func existingInstanceRunning() bool {
 }
 
 func main() {
+	if !isElevated() && !hasArg("--elevated") {
+		if err := relaunchElevated(); err != nil {
+			initLogger()
+			logf("elevation request failed: %v", err)
+		}
+		return
+	}
+
 	if existingInstanceRunning() {
 		initLogger()
 		logf("existing instance detected; reopening UI")
@@ -862,6 +871,49 @@ func main() {
 
 	logf("server starting addr=:8006 noBrowser=%v", *noBrowser)
 	log.Fatal(http.ListenAndServe(":8006", logRequests(mux)))
+}
+
+func hasArg(target string) bool {
+	for _, arg := range os.Args[1:] {
+		if arg == target {
+			return true
+		}
+	}
+	return false
+}
+
+func isElevated() bool {
+	var sid *windows.SID
+	if err := windows.AllocateAndInitializeSid(
+		&windows.SECURITY_NT_AUTHORITY,
+		2,
+		windows.SECURITY_BUILTIN_DOMAIN_RID,
+		windows.DOMAIN_ALIAS_RID_ADMINS,
+		0, 0, 0, 0, 0, 0,
+		&sid,
+	); err != nil {
+		return false
+	}
+	defer windows.FreeSid(sid)
+
+	token := windows.Token(0)
+	member, err := token.IsMember(sid)
+	return err == nil && member
+}
+
+func relaunchElevated() error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	args := append([]string{}, os.Args[1:]...)
+	args = append(args, "--elevated")
+	script := fmt.Sprintf(
+		`Start-Process -FilePath %s -ArgumentList %s -Verb RunAs -WindowStyle Hidden`,
+		strconv.Quote(executable),
+		strconv.Quote(strings.Join(args, " ")),
+	)
+	return exec.Command("powershell", "-NoProfile", "-Command", script).Start()
 }
 
 func ensureWintunDLL() error {
