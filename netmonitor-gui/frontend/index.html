@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru" translate="no">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
+    <title>NetMonitor GUI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <header>
+            <div class="header-content">
+                <h1>NetMonitor <span class="badge">Live</span></h1>
+                <div class="controls">
+                    <input type="text" id="search" placeholder="Поиск по имени или PID...">
+                    <button id="restart-btn" class="btn-warning">Перезапуск</button>
+                    <button id="exit-btn" class="btn-danger">Выход</button>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <div class="table-container glass">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Протокол</th>
+                            <th>Процесс</th>
+                            <th>PID</th>
+                            <th>Локальный адрес</th>
+                            <th>Внешний адрес</th>
+                            <th>Статус</th>
+                        </tr>
+                    </thead>
+                    <tbody id="conn-table">
+                        <!-- Connections will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </main>
+
+        <footer>
+            <div id="status">Подключение к серверу...</div>
+        </footer>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
