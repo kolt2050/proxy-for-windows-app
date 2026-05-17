@@ -167,6 +167,9 @@ pre {
     flex-direction: column;
     border: 1px solid var(--border);
 }
+#catalog-search {
+    width: 100%;
+}
 .catalog-item {
     padding: 10px 12px;
     border-bottom: 1px solid var(--border);

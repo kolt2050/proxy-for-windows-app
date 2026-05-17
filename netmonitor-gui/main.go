@@ -465,10 +465,24 @@ func handleProxyTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func chooseExecutable() (string, error) {
-	script := `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Filter = 'Applications (*.exe)|*.exe'; if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { $d.FileName }`
-	out, err := exec.Command("powershell", "-NoProfile", "-STA", "-Command", script).Output()
+	script := `
+Add-Type -AssemblyName System.Windows.Forms
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$owner.ShowInTaskbar = $false
+$owner.WindowState = [System.Windows.Forms.FormWindowState]::Minimized
+$owner.Show()
+$owner.Hide()
+$d = New-Object System.Windows.Forms.OpenFileDialog
+$d.Filter = 'Applications (*.exe)|*.exe'
+$d.Title = 'Выберите приложение'
+$d.Multiselect = $false
+if ($d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { $d.FileName }
+$owner.Dispose()
+`
+	out, err := exec.Command("powershell", "-NoProfile", "-STA", "-Command", script).CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
 	}
 	path := strings.TrimSpace(string(out))
 	if path == "" {
@@ -484,6 +498,7 @@ func handleChooseExecutable(w http.ResponseWriter, r *http.Request) {
 	}
 	path, err := chooseExecutable()
 	if err != nil {
+		logf("choose executable failed: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

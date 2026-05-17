@@ -7,6 +7,7 @@ const appsGrid = document.getElementById('apps-grid');
 const logOutput = document.getElementById('log-output');
 const catalogModal = document.getElementById('catalog-modal');
 const catalogList = document.getElementById('catalog-list');
+const catalogSearch = document.getElementById('catalog-search');
 
 let config = { device: '', proxies: [], applications: [] };
 let selectedAppIndex = -1;
@@ -98,6 +99,11 @@ function escapeHtml(value) {
         .replaceAll('"', '&quot;');
 }
 
+function setState(text, kind = '') {
+    proxyState.textContent = text;
+    proxyState.className = `state ${kind}`.trim();
+}
+
 async function refreshLog() {
     const res = await fetch('/log-tail');
     logOutput.textContent = res.status === 204 ? '' : await res.text();
@@ -148,28 +154,42 @@ document.getElementById('test-btn').onclick = async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ proxyId: selectedProxyId })
     });
-    proxyState.textContent = res.ok ? 'Прокси проверен' : 'Прокси недоступен';
-    proxyState.className = `state ${res.ok ? 'ok' : 'bad'}`;
+    setState(res.ok ? 'Прокси проверен' : 'Прокси недоступен', res.ok ? 'ok' : 'bad');
     refreshLog();
 };
 
 document.getElementById('choose-btn').onclick = async () => {
-    await save();
-    const res = await fetch('/applications/choose-exe', { method: 'POST' });
-    if (!res.ok) return;
-    config = normalize(await res.json());
-    render();
-    refreshLog();
+    const button = document.getElementById('choose-btn');
+    button.disabled = true;
+    setState('Открываю выбор .exe…');
+    try {
+        await save();
+        const res = await fetch('/applications/choose-exe', { method: 'POST' });
+        if (!res.ok) {
+            const message = (await res.text()).trim();
+            setState(message.includes('selection cancelled') ? 'Выбор .exe отменён' : 'Не удалось открыть выбор .exe', 'bad');
+            refreshLog();
+            return;
+        }
+        config = normalize(await res.json());
+        render();
+        setState('Приложение добавлено', 'ok');
+        refreshLog();
+    } catch {
+        setState('Не удалось открыть выбор .exe', 'bad');
+    } finally {
+        button.disabled = false;
+    }
 };
 
 document.getElementById('catalog-btn').onclick = async () => {
     await save();
     const catalog = await (await fetch('/applications/catalog')).json();
-    catalogList.innerHTML = catalog.map((app, index) =>
-        `<div class="catalog-item" data-index="${index}"><strong>${escapeHtml(app.name)}</strong><br><small>${escapeHtml(app.path)}</small></div>`
-    ).join('');
     catalogList._items = catalog;
+    catalogSearch.value = '';
+    renderCatalog(catalog);
     catalogModal.classList.remove('hidden');
+    catalogSearch.focus();
 };
 
 document.getElementById('close-catalog').onclick = () => catalogModal.classList.add('hidden');
@@ -188,6 +208,22 @@ catalogList.onclick = async (event) => {
     catalogModal.classList.add('hidden');
 };
 
+function renderCatalog(items) {
+    catalogList.innerHTML = items.map((app) => {
+        const index = catalogList._items.indexOf(app);
+        return `<div class="catalog-item" data-index="${index}"><strong>${escapeHtml(app.name)}</strong><br><small>${escapeHtml(app.path)}</small></div>`;
+    }).join('');
+}
+
+catalogSearch.oninput = () => {
+    const query = catalogSearch.value.trim().toLowerCase();
+    const items = catalogList._items || [];
+    const filtered = !query ? items : items.filter((app) =>
+        `${app.name} ${app.path} ${app.processName}`.toLowerCase().includes(query)
+    );
+    renderCatalog(filtered);
+};
+
 document.getElementById('delete-btn').onclick = async () => {
     if (selectedAppIndex < 0) return;
     const app = config.applications[selectedAppIndex];
@@ -204,8 +240,7 @@ document.getElementById('delete-btn').onclick = async () => {
 document.getElementById('start-btn').onclick = async () => {
     await save();
     const res = await fetch('/proxy-engine/start', { method: 'POST' });
-    proxyState.textContent = res.ok ? 'Маршрутизатор запущен' : 'Ошибка запуска';
-    proxyState.className = `state ${res.ok ? 'ok' : 'bad'}`;
+    setState(res.ok ? 'Маршрутизатор запущен' : 'Ошибка запуска', res.ok ? 'ok' : 'bad');
     refreshLog();
 };
 
@@ -233,8 +268,7 @@ appsGrid.ondblclick = async (event) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config.applications[selectedAppIndex])
     });
-    proxyState.textContent = res.ok ? 'Приложение запущено через прокси' : 'Ошибка запуска';
-    proxyState.className = `state ${res.ok ? 'ok' : 'bad'}`;
+    setState(res.ok ? 'Приложение запущено через прокси' : 'Ошибка запуска', res.ok ? 'ok' : 'bad');
     refreshLog();
 };
 
@@ -263,8 +297,7 @@ appsGrid.ondrop = async (event) => {
 };
 
 device.oninput = () => {
-    proxyState.textContent = 'Настройки изменены';
-    proxyState.className = 'state';
+    setState('Настройки изменены');
 };
 
 load();
