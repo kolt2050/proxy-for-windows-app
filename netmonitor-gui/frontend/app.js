@@ -23,7 +23,19 @@ function selectedProxy() {
     return config.proxies.find((proxy) => proxy.id === selectedProxyId) || config.proxies[0];
 }
 
+function ensureEditableProxy() {
+    if (config.proxies.length > 0) return;
+    const id = `proxy-${Date.now()}`;
+    config.proxies.push({ id, name: '', url: '' });
+    selectedProxyId = id;
+}
+
 async function save() {
+    ensureEditableProxy();
+    const current = selectedProxy();
+    if (current) {
+        current.url = proxyUrl.value.trim();
+    }
     const res = await fetch('/proxy-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,9 +132,6 @@ document.getElementById('add-proxy-btn').onclick = async () => {
 };
 
 document.getElementById('save-proxy-btn').onclick = async () => {
-    const current = selectedProxy();
-    if (!current) return;
-    current.url = proxyUrl.value.trim();
     await save();
 };
 
@@ -295,7 +304,10 @@ appsGrid.ondrop = async (event) => {
     await save();
 };
 
-proxyUrl.oninput = () => setState('Настройки изменены');
+proxyUrl.oninput = () => {
+    ensureEditableProxy();
+    setState('Настройки изменены');
+};
 
 load();
 refreshLog();
