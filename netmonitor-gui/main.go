@@ -79,7 +79,10 @@ type Application struct {
 	ProxyID     string `json:"proxyId"`
 }
 
-const proxyConfigPath = "proxy_config.json"
+const (
+	proxyConfigPath = "proxy_config.json"
+	defaultDevice   = "wintun://mytun"
+)
 
 var (
 	proxyEngineMu      sync.Mutex
@@ -274,6 +277,9 @@ func saveProxyConfig(config ProxyConfig) error {
 func normalizeProxyConfig(config ProxyConfig) ProxyConfig {
 	config.ProxyURL = strings.TrimSpace(config.ProxyURL)
 	config.Device = strings.TrimSpace(config.Device)
+	if config.Device == "" {
+		config.Device = defaultDevice
+	}
 
 	proxies := make([]ProxyEntry, 0, len(config.Proxies)+1)
 	proxyIDs := make(map[string]struct{}, len(config.Proxies)+1)
@@ -288,7 +294,7 @@ func normalizeProxyConfig(config ProxyConfig) ProxyConfig {
 			item.ID = fmt.Sprintf("proxy-%d", len(proxies)+1)
 		}
 		if item.Name == "" {
-			item.Name = fmt.Sprintf("Прокси %d", len(proxies)+1)
+			item.Name = proxyDisplayName(item.URL)
 		}
 		if _, exists := proxyIDs[item.ID]; exists {
 			continue
@@ -521,6 +527,28 @@ func normalizedProxyOrRaw(raw string) string {
 		return raw
 	}
 	return normalized
+}
+
+func proxyDisplayName(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "Новый прокси"
+	}
+	if !strings.Contains(raw, "://") {
+		parts := strings.Split(raw, ":")
+		if len(parts) >= 2 {
+			return parts[0] + ":" + parts[1]
+		}
+	}
+	normalized, err := normalizeProxyAddress(raw)
+	if err != nil {
+		return raw
+	}
+	u, err := url.Parse(normalized)
+	if err != nil {
+		return raw
+	}
+	return u.Host
 }
 
 func handleChooseExecutable(w http.ResponseWriter, r *http.Request) {

@@ -1,7 +1,5 @@
-const device = document.getElementById('device');
 const proxyState = document.getElementById('proxy-state');
 const proxiesList = document.getElementById('proxies-list');
-const proxyName = document.getElementById('proxy-name');
 const proxyUrl = document.getElementById('proxy-url');
 const appsGrid = document.getElementById('apps-grid');
 const logOutput = document.getElementById('log-output');
@@ -9,14 +7,13 @@ const catalogModal = document.getElementById('catalog-modal');
 const catalogList = document.getElementById('catalog-list');
 const catalogSearch = document.getElementById('catalog-search');
 
-let config = { device: '', proxies: [], applications: [] };
+let config = { proxies: [], applications: [] };
 let selectedAppIndex = -1;
 let selectedProxyId = '';
 let draggedAppIndex = -1;
 
 function normalize(value) {
     return {
-        device: value?.device || '',
         proxies: Array.isArray(value?.proxies) ? value.proxies : [],
         applications: Array.isArray(value?.applications) ? value.applications : []
     };
@@ -27,7 +24,6 @@ function selectedProxy() {
 }
 
 async function save() {
-    config.device = device.value.trim();
     const res = await fetch('/proxy-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -42,7 +38,6 @@ async function save() {
 
 async function load() {
     config = normalize(await (await fetch('/proxy-config')).json());
-    device.value = config.device;
     selectedProxyId = config.proxies[0]?.id || '';
     render();
 }
@@ -55,12 +50,10 @@ function render() {
 function renderProxies() {
     proxiesList.innerHTML = config.proxies.map((proxy) => `
         <button class="proxy-chip ${proxy.id === selectedProxyId ? 'selected' : ''}" data-id="${proxy.id}">
-            <strong>${escapeHtml(proxy.name)}</strong>
-            <span>${escapeHtml(maskProxy(proxy.url))}</span>
+            <strong>${escapeHtml(proxyLabel(proxy))}</strong>
         </button>
     `).join('');
     const current = selectedProxy();
-    proxyName.value = current?.name || '';
     proxyUrl.value = current?.url || '';
 }
 
@@ -73,10 +66,10 @@ function renderApps() {
                 <div class="label" title="${escapeHtml(app.path || app.processName)}">${escapeHtml(app.name || app.processName)}</div>
                 <select class="app-proxy" data-index="${i}">
                     ${config.proxies.map((item) => `
-                        <option value="${item.id}" ${item.id === app.proxyId ? 'selected' : ''}>${escapeHtml(item.name)}</option>
+                        <option value="${item.id}" ${item.id === app.proxyId ? 'selected' : ''}>${escapeHtml(proxyLabel(item))}</option>
                     `).join('')}
                 </select>
-                <small>${escapeHtml(proxy?.name || 'Прокси не выбран')}</small>
+                <small>${escapeHtml(proxy ? proxyLabel(proxy) : 'Прокси не выбран')}</small>
             </div>`;
     }).join('');
 }
@@ -93,6 +86,10 @@ function maskProxy(value) {
     } catch {
         return value;
     }
+}
+
+function proxyLabel(proxy) {
+    return maskProxy(proxy?.url || '') || 'Новый прокси';
 }
 
 function escapeHtml(value) {
@@ -115,9 +112,8 @@ async function refreshLog() {
 }
 
 document.getElementById('add-proxy-btn').onclick = async () => {
-    const next = config.proxies.length + 1;
     const id = `proxy-${Date.now()}`;
-    config.proxies.push({ id, name: `Прокси ${next}`, url: '' });
+    config.proxies.push({ id, name: '', url: '' });
     selectedProxyId = id;
     renderProxies();
     proxyUrl.focus();
@@ -126,7 +122,6 @@ document.getElementById('add-proxy-btn').onclick = async () => {
 document.getElementById('save-proxy-btn').onclick = async () => {
     const current = selectedProxy();
     if (!current) return;
-    current.name = proxyName.value.trim() || current.name;
     current.url = proxyUrl.value.trim();
     await save();
 };
@@ -300,9 +295,7 @@ appsGrid.ondrop = async (event) => {
     await save();
 };
 
-device.oninput = () => {
-    setState('Настройки изменены');
-};
+proxyUrl.oninput = () => setState('Настройки изменены');
 
 load();
 refreshLog();

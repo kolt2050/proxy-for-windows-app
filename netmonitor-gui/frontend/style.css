@@ -74,11 +74,8 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     align-items: flex-start;
     gap: 2px;
 }
-.proxy-chip span { color: var(--muted); font-size: 12px; }
 .proxy-chip.selected { border-color: var(--blue); background: var(--blue-soft); }
-.proxy-editor #proxy-name { width: 170px; }
 .proxy-editor #proxy-url { flex: 1; }
-.proxy-editor #device { width: 180px; }
 .apps-card { min-height: 320px; display: flex; flex-direction: column; }
 .apps-grid {
     flex: 1;
