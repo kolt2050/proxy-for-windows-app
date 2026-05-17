@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="ru" translate="no">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +7,6 @@
     <title>NetMonitor GUI</title>
     <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
     <div class="app-container">
         <header>
@@ -22,11 +20,33 @@
             </div>
         </header>
 
+        <section class="proxy-panel glass">
+            <div class="proxy-fields">
+                <label>
+                    <span>Прокси</span>
+                    <input type="text" id="proxy-url" placeholder="socks5://127.0.0.1:1080">
+                </label>
+                <label>
+                    <span>Устройство</span>
+                    <input type="text" id="device" placeholder="wintun://mytun">
+                </label>
+                <button id="save-proxy-btn">Сохранить</button>
+                <button id="start-proxy-btn">Запустить</button>
+                <button id="stop-proxy-btn" class="btn-danger">Остановить</button>
+            </div>
+            <div class="selected-apps">
+                <span class="muted">Через прокси:</span>
+                <div id="selected-processes" class="chips"></div>
+            </div>
+            <p class="hint">Кликните по процессу в таблице, чтобы включить или исключить его из проксирования. Можно также перетащить сюда .exe или .lnk.</p>
+        </section>
+
         <main>
             <div class="table-container glass">
                 <table>
                     <thead>
                         <tr>
+                            <th>Прокси</th>
                             <th>Протокол</th>
                             <th>Процесс</th>
                             <th>PID</th>
@@ -35,9 +55,7 @@
                             <th>Статус</th>
                         </tr>
                     </thead>
-                    <tbody id="conn-table">
-                        <!-- Connections will be injected here -->
-                    </tbody>
+                    <tbody id="conn-table"></tbody>
                 </table>
             </div>
         </main>
@@ -48,5 +66,4 @@
     </div>
     <script src="app.js"></script>
 </body>
-
 </html>

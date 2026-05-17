@@ -100,6 +100,58 @@ button:hover {
     opacity: 0.8;
 }
 
+.proxy-panel {
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+}
+
+.proxy-fields {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.proxy-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.selected-apps {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 30px;
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chip {
+    padding: 5px 10px;
+    background: rgba(88, 166, 255, 0.16);
+    color: var(--accent-color);
+    border: 1px solid rgba(88, 166, 255, 0.35);
+}
+
+.muted,
+.hint {
+    color: var(--text-muted);
+}
+
+.hint {
+    margin-top: 10px;
+    font-size: 0.8rem;
+}
+
 main {
     flex-grow: 1;
     overflow: hidden;
@@ -144,6 +196,30 @@ td {
 
 tr:hover {
     background: rgba(255, 255, 255, 0.03);
+}
+
+.selected-row {
+    background: rgba(88, 166, 255, 0.08);
+}
+
+.route {
+    display: inline-flex;
+    min-width: 48px;
+    justify-content: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+}
+
+.route.proxy {
+    background: rgba(88, 166, 255, 0.16);
+    color: var(--accent-color);
+}
+
+.route.direct {
+    background: rgba(139, 148, 158, 0.14);
+    color: var(--text-muted);
 }
 
 footer {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -36,6 +38,19 @@ type Connection struct {
 	Remote string `json:"remote"`
 	State  string `json:"state"`
 }
+
+type ProxyConfig struct {
+	ProxyURL  string   `json:"proxyUrl"`
+	Device    string   `json:"device"`
+	Processes []string `json:"processes"`
+}
+
+const proxyConfigPath = "proxy_config.json"
+
+var (
+	proxyEngineMu  sync.Mutex
+	proxyEngineCmd *exec.Cmd
+)
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
@@ -160,7 +175,7 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 	} else if ext == ".lnk" {
 		// Use shortcut name without extension as a high-quality fallback
 		shortcutName := strings.TrimSuffix(handler.Filename, filepath.Ext(handler.Filename))
-		
+
 		// Save to temp file to resolve
 		tempFile, err := os.CreateTemp("", "*.lnk")
 		if err != nil {
@@ -180,7 +195,7 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("Recognize: resolving shortcut %s (original name: %s)", tempFile.Name(), shortcutName)
 		target, err := resolveLNK(tempFile.Name())
-		
+
 		if err != nil {
 			log.Printf("Recognize: resolveLNK failed: %v. Falling back to shortcut name: %s", err, shortcutName)
 			if userLog != nil {
@@ -193,8 +208,8 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 			if userLog != nil {
 				userLog.Printf("Recognition result: Shortcut %s resolved to %s", handler.Filename, target)
 			}
-			
-			// Smart logic: if target is something generic like 'javaw.exe' or 'cmd.exe', 
+
+			// Smart logic: if target is something generic like 'javaw.exe' or 'cmd.exe',
 			// the shortcut name might be more useful. Otherwise, the exe name is best for network monitoring.
 			lowTarget := strings.ToLower(targetBase)
 			if lowTarget == "" || lowTarget == "javaw.exe" || lowTarget == "java.exe" || lowTarget == "cmd.exe" || lowTarget == "python.exe" {
@@ -217,11 +232,169 @@ func handleRecognize(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"proc": "%s"}`, procName)
 }
 
+func loadProxyConfig() ProxyConfig {
+	data, err := os.ReadFile(proxyConfigPath)
+	if err != nil {
+		return ProxyConfig{}
+	}
+	var config ProxyConfig
+	if err := json.Unmarshal(data, &config); err != nil {
+		log.Printf("Proxy config load error: %v", err)
+		return ProxyConfig{}
+	}
+	return normalizeProxyConfig(config)
+}
+
+func saveProxyConfig(config ProxyConfig) error {
+	config = normalizeProxyConfig(config)
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(proxyConfigPath, data, 0644)
+}
+
+func normalizeProxyConfig(config ProxyConfig) ProxyConfig {
+	seen := make(map[string]struct{}, len(config.Processes))
+	processes := make([]string, 0, len(config.Processes))
+	for _, process := range config.Processes {
+		process = strings.TrimSpace(process)
+		if process == "" {
+			continue
+		}
+		key := strings.ToLower(process)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		processes = append(processes, process)
+	}
+	config.ProxyURL = strings.TrimSpace(config.ProxyURL)
+	config.Device = strings.TrimSpace(config.Device)
+	config.Processes = processes
+	return config
+}
+
+func handleProxyConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(loadProxyConfig())
+	case http.MethodPost:
+		var config ProxyConfig
+		if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		config = normalizeProxyConfig(config)
+		if err := saveProxyConfig(config); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if userLog != nil {
+			userLog.Printf("Proxy config updated: proxy=%s processes=%v", config.ProxyURL, config.Processes)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(config)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func proxyEnginePath() string {
+	return filepath.Join("..", "tun2socks", "tun2socks.exe")
+}
+
+func handleProxyEngineStatus(w http.ResponseWriter, r *http.Request) {
+	proxyEngineMu.Lock()
+	running := proxyEngineCmd != nil && proxyEngineCmd.Process != nil
+	proxyEngineMu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"running": running})
+}
+
+func handleProxyEngineStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	config := loadProxyConfig()
+	if config.ProxyURL == "" || config.Device == "" {
+		http.Error(w, "proxy and device are required", http.StatusBadRequest)
+		return
+	}
+	if len(config.Processes) == 0 {
+		http.Error(w, "at least one process is required", http.StatusBadRequest)
+		return
+	}
+	if _, err := os.Stat(proxyEnginePath()); err != nil {
+		http.Error(w, "tun2socks.exe not found at ../tun2socks/tun2socks.exe", http.StatusBadRequest)
+		return
+	}
+
+	proxyEngineMu.Lock()
+	defer proxyEngineMu.Unlock()
+	if proxyEngineCmd != nil && proxyEngineCmd.Process != nil {
+		http.Error(w, "proxy engine already running", http.StatusConflict)
+		return
+	}
+
+	args := []string{
+		"--device", config.Device,
+		"--proxy", config.ProxyURL,
+		"--proxy-processes", strings.Join(config.Processes, ","),
+	}
+	cmd := exec.Command(proxyEnginePath(), args...)
+	if err := cmd.Start(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	proxyEngineCmd = cmd
+	if userLog != nil {
+		userLog.Printf("Proxy engine started: %s %v", proxyEnginePath(), args)
+	}
+	go func() {
+		err := cmd.Wait()
+		proxyEngineMu.Lock()
+		if proxyEngineCmd == cmd {
+			proxyEngineCmd = nil
+		}
+		proxyEngineMu.Unlock()
+		if err != nil {
+			log.Printf("Proxy engine stopped: %v", err)
+		}
+	}()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func handleProxyEngineStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	proxyEngineMu.Lock()
+	defer proxyEngineMu.Unlock()
+	if proxyEngineCmd == nil || proxyEngineCmd.Process == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err := proxyEngineCmd.Process.Kill(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if userLog != nil {
+		userLog.Println("Proxy engine stopped by user")
+	}
+	proxyEngineCmd = nil
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func resolveLNK(path string) (string, error) {
 	// Escape single quotes for PowerShell
 	escapedPath := strings.ReplaceAll(path, "'", "''")
 	script := fmt.Sprintf(`$sh = New-Object -ComObject WScript.Shell; $s = $sh.CreateShortcut('%s'); $s.TargetPath`, escapedPath)
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -254,6 +427,10 @@ func main() {
 	})
 	http.HandleFunc("/ws", handleConnections)
 	http.HandleFunc("/recognize", handleRecognize)
+	http.HandleFunc("/proxy-config", handleProxyConfig)
+	http.HandleFunc("/proxy-engine/status", handleProxyEngineStatus)
+	http.HandleFunc("/proxy-engine/start", handleProxyEngineStart)
+	http.HandleFunc("/proxy-engine/stop", handleProxyEngineStop)
 	http.HandleFunc("/restart", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("Restarting application...")
 		if userLog != nil {
@@ -264,7 +441,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		
+
 		// Create new process arguments, ensuring -no-browser is present
 		args := []string{"-no-browser"}
 		for _, arg := range os.Args[1:] {

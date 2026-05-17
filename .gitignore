@@ -1,2 +1,7 @@
 .agent/
+**/.cache/
+netmonitor-gui/proxy_config.json
+*.exe
+*.log
+netmonitor-gui/test.txt
 
