@@ -787,7 +787,7 @@ func main() {
 		log.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.FS(frontendRoot)))
+	mux.Handle("/", noCache(http.FileServer(http.FS(frontendRoot))))
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("pong"))
 	})
@@ -850,6 +850,15 @@ func logRequests(next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		logf("http method=%s path=%s remote=%s duration=%s", r.Method, r.URL.Path, r.RemoteAddr, time.Since(start))
+	})
+}
+
+func noCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		next.ServeHTTP(w, r)
 	})
 }
 
