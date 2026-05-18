@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -938,12 +937,19 @@ func relaunchElevated() error {
 	}
 	args := append([]string{}, os.Args[1:]...)
 	args = append(args, "--elevated")
-	script := fmt.Sprintf(
-		`Start-Process -FilePath %s -ArgumentList %s -Verb RunAs -WindowStyle Hidden`,
-		strconv.Quote(executable),
-		strconv.Quote(strings.Join(args, " ")),
-	)
-	return exec.Command("powershell", "-NoProfile", "-Command", script).Start()
+	verb, err := windows.UTF16PtrFromString("runas")
+	if err != nil {
+		return err
+	}
+	file, err := windows.UTF16PtrFromString(executable)
+	if err != nil {
+		return err
+	}
+	params, err := windows.UTF16PtrFromString(strings.Join(args, " "))
+	if err != nil {
+		return err
+	}
+	return windows.ShellExecute(0, verb, file, params, nil, windows.SW_HIDE)
 }
 
 func ensureWintunDLL() error {
