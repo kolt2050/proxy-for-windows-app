@@ -28,6 +28,7 @@ import (
 )
 
 var appLog *log.Logger
+var startupLog *log.Logger
 
 //go:embed frontend/*
 var frontendFS embed.FS
@@ -44,6 +45,25 @@ func initLogger() {
 	appLog = log.New(f, "", log.LstdFlags)
 	log.SetOutput(f)
 	log.SetFlags(log.LstdFlags)
+}
+
+func initStartupLogger() {
+	executable, err := os.Executable()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(filepath.Dir(executable), "startup.log")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	startupLog = log.New(f, "", log.LstdFlags)
+}
+
+func startupLogf(format string, args ...any) {
+	if startupLog != nil {
+		startupLog.Printf(format, args...)
+	}
 }
 
 func logf(format string, args ...any) {
@@ -806,22 +826,32 @@ func existingInstanceRunning() bool {
 }
 
 func main() {
-	if !isElevated() && !hasArg("--elevated") {
+	initStartupLogger()
+	startupLogf("startup begin args=%q", os.Args[1:])
+	elevated := isElevated()
+	startupLogf("startup elevated=%v hasElevatedArg=%v", elevated, hasArg("--elevated"))
+	if !elevated && !hasArg("--elevated") {
+		startupLogf("startup requesting elevation")
 		if err := relaunchElevated(); err != nil {
+			startupLogf("startup elevation request failed: %v", err)
 			initLogger()
 			logf("elevation request failed: %v", err)
+		} else {
+			startupLogf("startup elevation request submitted")
 		}
 		return
 	}
 
 	if existingInstanceRunning() {
 		initLogger()
+		startupLogf("startup existing instance detected")
 		logf("existing instance detected; reopening UI")
 		openAppWindow()
 		return
 	}
 
 	initLogger()
+	startupLogf("startup entering main server")
 	logf("application startup version=single-exe os=%s arch=%s", runtime.GOOS, runtime.GOARCH)
 	if err := ensureWintunDLL(); err != nil {
 		logf("wintun setup failed: %v", err)
@@ -949,7 +979,9 @@ func relaunchElevated() error {
 	if err != nil {
 		return err
 	}
-	return windows.ShellExecute(0, verb, file, params, nil, windows.SW_HIDE)
+	err = windows.ShellExecute(0, verb, file, params, nil, windows.SW_HIDE)
+	startupLogf("startup ShellExecute runas returned err=%v executable=%q params=%q", err, executable, strings.Join(args, " "))
+	return err
 }
 
 func ensureWintunDLL() error {

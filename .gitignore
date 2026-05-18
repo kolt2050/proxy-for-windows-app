@@ -6,4 +6,5 @@ netmonitor-gui/proxy_config.json
 *.log
 netmonitor-gui/test.txt
 app.log
+startup.log
 
