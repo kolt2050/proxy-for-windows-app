@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -698,7 +699,12 @@ func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
 		proxyEngineRunning = true
 		logf("proxy engine autostarted for application launch device=%s", config.Device)
 	}
-	cmd := exec.Command(app.Path)
+	cmd, err := buildLaunchCommand(app)
+	if err != nil {
+		logf("application launch setup failed path=%s error=%v", app.Path, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := cmd.Start(); err != nil {
 		logf("application launch failed path=%s error=%v", app.Path, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -711,6 +717,30 @@ func handleLaunchApplication(w http.ResponseWriter, r *http.Request) {
 	}
 	logf("application launched path=%s pid=%d proxy=%s", app.Path, cmd.Process.Pid, proxyDisplayName(app.Proxy))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func buildLaunchCommand(app Application) (*exec.Cmd, error) {
+	name := strings.ToLower(filepath.Base(app.Path))
+	switch name {
+	case "chrome.exe", "msedge.exe", "brave.exe":
+		root, err := os.UserConfigDir()
+		if err != nil {
+			return nil, err
+		}
+		sum := sha256.Sum256([]byte(strings.ToLower(app.Path + "|" + app.Proxy)))
+		profileDir := filepath.Join(root, "ProxyForApp", "profiles", fmt.Sprintf("%x", sum[:8]))
+		if err := os.MkdirAll(profileDir, 0755); err != nil {
+			return nil, err
+		}
+		return exec.Command(
+			app.Path,
+			"--user-data-dir="+profileDir,
+			"--new-window",
+			"--no-first-run",
+		), nil
+	default:
+		return exec.Command(app.Path), nil
+	}
 }
 
 func handleLogTail(w http.ResponseWriter, r *http.Request) {
