@@ -880,6 +880,7 @@ func main() {
 	hideConsole()
 	startupLogf("startup console hidden")
 	noBrowser := flag.Bool("no-browser", false, "Do not open browser on startup")
+	_ = flag.Bool("elevated", false, "Internal flag set after UAC relaunch")
 	flag.Parse()
 	startupLogf("startup flags parsed noBrowser=%v", *noBrowser)
 
