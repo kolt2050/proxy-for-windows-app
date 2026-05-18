@@ -37,7 +37,12 @@ var frontendFS embed.FS
 var embeddedWintunDLL []byte
 
 func initLogger() {
-	f, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	path, err := appDataPath("app.log")
+	if err != nil {
+		log.Printf("failed to resolve app.log path: %v", err)
+		return
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("failed to open app.log: %v", err)
 		return
@@ -48,16 +53,23 @@ func initLogger() {
 }
 
 func initStartupLogger() {
-	executable, err := os.Executable()
+	path, err := appDataPath("startup.log")
 	if err != nil {
 		return
 	}
-	path := filepath.Join(filepath.Dir(executable), "startup.log")
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	startupLog = log.New(f, "", log.LstdFlags)
+}
+
+func appDataPath(name string) (string, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(executable), name), nil
 }
 
 func startupLogf(format string, args ...any) {
@@ -763,7 +775,12 @@ func buildLaunchCommand(app Application) (*exec.Cmd, error) {
 }
 
 func handleLogTail(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile("app.log")
+	path, err := appDataPath("app.log")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			w.WriteHeader(http.StatusNoContent)
