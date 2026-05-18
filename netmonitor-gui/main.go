@@ -870,17 +870,25 @@ func main() {
 	initLogger()
 	startupLogf("startup entering main server")
 	logf("application startup version=single-exe os=%s arch=%s", runtime.GOOS, runtime.GOARCH)
+	startupLogf("startup logger initialized")
 	if err := ensureWintunDLL(); err != nil {
 		logf("wintun setup failed: %v", err)
+		startupLogf("startup wintun setup failed: %v", err)
+	} else {
+		startupLogf("startup wintun ready")
 	}
 	hideConsole()
+	startupLogf("startup console hidden")
 	noBrowser := flag.Bool("no-browser", false, "Do not open browser on startup")
 	flag.Parse()
+	startupLogf("startup flags parsed noBrowser=%v", *noBrowser)
 
 	frontendRoot, err := fs.Sub(frontendFS, "frontend")
 	if err != nil {
+		startupLogf("startup frontend fs failed: %v", err)
 		log.Fatal(err)
 	}
+	startupLogf("startup frontend fs ready")
 	mux := http.NewServeMux()
 	mux.Handle("/", noCache(http.FileServer(http.FS(frontendRoot))))
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -939,6 +947,7 @@ func main() {
 	if !*noBrowser {
 		go func() {
 			time.Sleep(1 * time.Second)
+			startupLogf("startup opening app window")
 			openAppWindow()
 		}()
 	}
@@ -946,6 +955,7 @@ func main() {
 	go watchUIHeartbeat()
 
 	logf("server starting addr=:8006 noBrowser=%v", *noBrowser)
+	startupLogf("startup listen begin addr=:8006 noBrowser=%v", *noBrowser)
 	log.Fatal(http.ListenAndServe(":8006", logRequests(mux)))
 }
 
