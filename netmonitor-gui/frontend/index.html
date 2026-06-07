@@ -9,7 +9,7 @@
     <div class="app">
         <header>
             <div>
-                <h1>ProxyForApp <span>0.8.13</span></h1>
+                <h1>ProxyForApp <span id="app-version">dev</span></h1>
                 <p>Добавь приложение и укажи его прокси прямо на ярлыке</p>
             </div>
             <div id="proxy-state" class="state">Готов к настройке</div>
@@ -19,6 +19,9 @@
             <div class="section-head">
                 <h2>Приложения</h2>
                 <div class="actions">
+                    <button id="export-btn">&#1069;&#1082;&#1089;&#1087;&#1086;&#1088;&#1090;</button>
+                    <button id="import-btn">&#1048;&#1084;&#1087;&#1086;&#1088;&#1090;</button>
+                    <button id="test-all-btn">&#1055;&#1088;&#1086;&#1074;&#1077;&#1088;&#1080;&#1090;&#1100; &#1074;&#1089;&#1077; &#1087;&#1088;&#1086;&#1082;&#1089;&#1080;</button>
                     <button id="catalog-btn">Добавить из списка</button>
                     <button id="choose-btn">Выбрать .exe</button>
                     <button id="delete-btn">Удалить</button>
@@ -29,6 +32,9 @@
         </section>
 
         <section class="console">
+            <div class="console-head">
+                <select id="log-source"></select>
+            </div>
             <pre id="log-output"></pre>
         </section>
     </div>
@@ -40,6 +46,16 @@
             </div>
             <input id="catalog-search" type="text" placeholder="Поиск по названию или пути">
             <div id="catalog-list" class="catalog-list"></div>
+        </div>
+    </div>
+    <div id="delete-modal" class="modal hidden">
+        <div class="modal-card confirm-card">
+            <h2>Удалить ярлык?</h2>
+            <p id="delete-modal-text"></p>
+            <div class="confirm-actions">
+                <button id="cancel-delete">Отмена</button>
+                <button id="confirm-delete" class="danger">Удалить</button>
+            </div>
         </div>
     </div>
     <script src="app.js"></script>

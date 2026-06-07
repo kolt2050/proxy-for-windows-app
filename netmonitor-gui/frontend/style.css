@@ -59,6 +59,12 @@ button {
 }
 button:hover { background: #f4f7fb; }
 button.primary { background: var(--blue); color: #fff; border-color: var(--blue); min-width: 88px; }
+button.danger {
+    color: #fff;
+    background: #d84b4b;
+    border-color: #d84b4b;
+}
+button.danger:hover { background: #c53d3d; }
 .apps-card { min-height: 320px; display: flex; flex-direction: column; }
 .apps-grid {
     flex: 1;
@@ -72,21 +78,29 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     padding: 10px;
 }
 .app-tile {
-    width: 230px;
-    min-height: 138px;
+    width: 188px;
+    min-height: 112px;
     border: 1px solid transparent;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 7px;
+    gap: 5px;
     cursor: pointer;
     text-align: center;
-    padding: 8px;
+    padding: 8px 7px;
 }
 .app-tile:hover, .app-tile.selected { border-color: #c8d7ee; background: #fff; }
 .app-tile.selected { background: var(--blue-soft); border-color: var(--blue); }
+.app-tile.missing-proxy,
+.app-tile.proxy-bad {
+    border-color: #e36a6a;
+    background: #fff3f3;
+}
+.app-tile.proxy-ok {
+    border-color: #8ac8a4;
+}
 .icon {
     width: 34px;
     height: 34px;
@@ -96,21 +110,68 @@ button.primary { background: var(--blue); color: #fff; border-color: var(--blue)
     color: #fff;
     background: linear-gradient(135deg, #3975e6, #55b3ff);
     font-weight: 700;
+    overflow: hidden;
+}
+.icon.has-image {
+    background: transparent;
+    border-radius: 0;
+}
+.icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
 }
 .label {
-    width: 210px;
+    width: 172px;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-size: 12px;
 }
-.app-proxy-input { width: 210px; height: 30px; font-size: 12px; padding: 0 8px; }
+.proxy-meta {
+    width: 172px;
+    min-height: 15px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--muted);
+    font-size: 11px;
+}
+.proxy-check {
+    width: 172px;
+    min-height: 14px;
+    color: var(--muted);
+    font-size: 11px;
+}
+.missing-proxy .proxy-check,
+.proxy-bad .proxy-check {
+    color: #a12626;
+    font-weight: 600;
+}
+.proxy-ok .proxy-check {
+    color: #167445;
+    font-weight: 600;
+}
+.app-proxy-input { width: 172px; height: 28px; font-size: 12px; padding: 0 8px; }
+.tile-log-btn {
+    height: 24px;
+    padding: 0 10px;
+    font-size: 11px;
+}
 .console {
     min-height: 118px;
     flex: 1;
     background: var(--console);
     border-radius: 8px;
     overflow: hidden;
+}
+.console-head {
+    padding: 10px 12px 0;
+}
+#log-source {
+    width: 240px;
+    height: 30px;
+    background: #fff;
 }
 pre {
     margin: 0;
@@ -155,3 +216,18 @@ pre {
     cursor: pointer;
 }
 .catalog-item:hover { background: var(--blue-soft); }
+.confirm-card {
+    width: min(360px, calc(100vw - 40px));
+}
+.confirm-card h2 {
+    margin-bottom: 0;
+}
+.confirm-card p {
+    margin: 0;
+    color: var(--muted);
+}
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}

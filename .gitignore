@@ -1,6 +1,8 @@
 .agent/
 **/.cache/
 netmonitor-gui/proxy_config.json
+/proxy_config.json
+/wintun.dll
 *.exe
 *.exe~
 *.log
